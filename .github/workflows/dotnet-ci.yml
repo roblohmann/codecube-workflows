@@ -1,0 +1,53 @@
+name: .NET CI (reusable)
+
+# Reusable workflow: restore, build and test a solution. No packaging, no publishing.
+# Called from the ci.yml in each CodeCube.* repository on push / pull request.
+
+on:
+  workflow_call:
+    inputs:
+      solution:
+        description: Path to the .sln (or csproj) to build
+        required: true
+        type: string
+      dotnet-versions:
+        description: SDK/runtime versions for actions/setup-dotnet (multiline)
+        required: false
+        type: string
+        default: |
+          9.0.x
+          10.0.x
+      run-tests:
+        description: Run dotnet test after the build
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ inputs.dotnet-versions }}
+
+      - name: Restore
+        run: dotnet restore "${{ inputs.solution }}"
+
+      - name: Build
+        run: >
+          dotnet build "${{ inputs.solution }}" --configuration Release --no-restore
+          -p:ContinuousIntegrationBuild=true
+
+      - name: Test
+        if: inputs.run-tests
+        run: dotnet test "${{ inputs.solution }}" --configuration Release --no-build

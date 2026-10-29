@@ -1,0 +1,80 @@
+name: NuGet pack (reusable)
+
+# Reusable workflow: build, test and pack one csproj; uploads the nupkg as artifact "nupkg".
+# Publishing is done by the caller (composite action nuget-publish) because nuget.org Trusted Publishing
+# validates job_workflow_ref, which must point at the calling repository's own workflow file.
+# Called from the release.yml in each CodeCube.* repository on a version tag.
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: Path to the csproj to pack (relative to the repository root)
+        required: true
+        type: string
+      version:
+        description: Package version, e.g. 9.0.5 or 9.1.0-preview1
+        required: true
+        type: string
+      test-projects:
+        description: Space-separated test project paths; empty = no tests
+        required: false
+        type: string
+        default: ''
+      dotnet-versions:
+        description: SDK/runtime versions for actions/setup-dotnet (multiline)
+        required: false
+        type: string
+        default: |
+          9.0.x
+          10.0.x
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ inputs.dotnet-versions }}
+
+      - name: Validate version
+        run: |
+          if ! [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Invalid version '${{ inputs.version }}'"; exit 1
+          fi
+
+      - name: Restore
+        run: dotnet restore "${{ inputs.project }}"
+
+      - name: Build
+        run: >
+          dotnet build "${{ inputs.project }}" --configuration Release --no-restore
+          -p:Version=${{ inputs.version }} -p:ContinuousIntegrationBuild=true
+
+      - name: Test
+        if: inputs.test-projects != ''
+        run: |
+          for p in ${{ inputs.test-projects }}; do
+            dotnet test "$p" --configuration Release -p:Version=${{ inputs.version }}
+          done
+
+      - name: Pack
+        run: >
+          dotnet pack "${{ inputs.project }}" --configuration Release --no-build
+          -p:Version=${{ inputs.version }} -p:ContinuousIntegrationBuild=true
+          --output ./nupkg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: nupkg/*.nupkg
+          if-no-files-found: error
