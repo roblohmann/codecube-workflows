@@ -6,7 +6,7 @@ Reusable GitHub Actions workflows and actions for the `CodeCube.*` NuGet package
 |---|---|---|
 | `.github/workflows/dotnet-ci.yml` | restore, build, test a solution | `ci.yml` in each repo (push / pull request) |
 | `.github/workflows/nuget-pack.yml` | build, test, pack one csproj; uploads artifact `nupkg` | `release.yml` in each repo (tag `vX.Y.Z` or `<Project>/vX.Y.Z`) |
-| `.github/actions/nuget-publish` | composite action: NuGet Trusted Publishing (OIDC) + `dotnet nuget push` | `publish` job in each repo's `release.yml` |
+| `.github/actions/nuget-publish` | composite action: NuGet Trusted Publishing (OIDC) + `dotnet nuget push` + GitHub Release with nupkg attached | `publish` job in each repo's `release.yml` |
 
 ## Why the publish step is not a reusable workflow
 
@@ -41,4 +41,4 @@ git tag -f v1 && git push -f origin v1
 - A Trusted Publishing policy on <https://www.nuget.org/account/trustedpublishing>:
   owner `roblohmann`, repository `<repo name>`, workflow file `release.yml`, environment `nuget.org`.
 - GitHub environment `nuget.org` (no secrets needed).
-- `publish` job with `permissions: id-token: write` and `contents: read`.
+- `publish` job with `permissions: id-token: write` and `contents: write` (the GitHub Release; `contents: read` suffices with `github-release: false`).

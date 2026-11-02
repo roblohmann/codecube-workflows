@@ -1,8 +1,10 @@
 name: NuGet publish (Trusted Publishing)
 description: >
   Downloads the "nupkg" artifact produced by nuget-pack.yml, exchanges the GitHub OIDC token
-  for a short-lived nuget.org API key (NuGet/login) and pushes the packages.
-  The calling job needs `permissions: id-token: write` and should run in environment `nuget.org`.
+  for a short-lived nuget.org API key (NuGet/login), pushes the packages and creates a GitHub
+  Release on the tag with the .nupkg files attached.
+  The calling job needs `permissions: id-token: write` and `contents: write` (read if
+  github-release is false) and should run in environment `nuget.org`.
 
 inputs:
   user:
@@ -13,6 +15,10 @@ inputs:
     description: Name of the artifact that holds the .nupkg files
     required: false
     default: nupkg
+  github-release:
+    description: Create a GitHub Release for the tag (auto-generated notes, nupkg attached)
+    required: false
+    default: 'true'
 
 runs:
   using: composite
@@ -39,3 +45,14 @@ runs:
         --source https://api.nuget.org/v3/index.json
         --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
         --skip-duplicate
+
+    # After the push on purpose: a failure here must never block the NuGet release.
+    - name: GitHub Release
+      if: inputs.github-release == 'true'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: ${{ github.ref_name }}
+        generate_release_notes: true
+        prerelease: ${{ contains(github.ref_name, '-') }}
+        files: nupkg/*.nupkg
